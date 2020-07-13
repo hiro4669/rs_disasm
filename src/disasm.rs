@@ -126,7 +126,12 @@ impl<T> I8086Disasm<T> {
         ret
     }
 
-    fn get_effective_addr(opcode: &OpCode) -> String {        
+    fn get_effective_addr(opcode: &OpCode) -> String {
+
+        if opcode.md == 3 {
+            return I8086Disasm::<MinixBinData>::get_reg_str(opcode.w, opcode.rm);
+        }
+
         let mem = match opcode.rm {
             0 => "bx+si",
             1 => "bx+di",
@@ -249,6 +254,29 @@ impl<T> I8086Disasm<T> {
         println!("{}", line);        
     }
 
+    fn dump_xor(opcode: &OpCode, prev_pc: usize) {
+        let mut line = String::default();
+        line.push_str(&I8086Disasm::<MinixBinData>::get_pc_str(prev_pc));
+        line.push_str(&I8086Disasm::<MinixBinData>::get_rawdata_str(opcode));        
+        line.push_str("xor ");
+        let reg_str = &I8086Disasm::<MinixBinData>::get_reg_str(opcode.w, opcode.reg);
+        let ef_addr = &I8086Disasm::<MinixBinData>::get_effective_addr(opcode);
+        match opcode.d {
+            0 => {
+                line.push_str(ef_addr);
+                line.push_str(", ");
+                line.push_str(reg_str);
+            }
+            1 => {
+                line.push_str(reg_str);
+                line.push_str(", ");
+                line.push_str(ef_addr);                                
+            }
+            _ => std::process::exit(1)
+        }
+        println!("{}", line);
+    }
+
     fn dump_int(opcode: &OpCode, prev_pc: usize) {
         let mut line = String::default();        
         line.push_str(&I8086Disasm::<MinixBinData>::get_pc_str(prev_pc));
@@ -349,6 +377,12 @@ impl<T: BinData> Disasm for I8086Disasm<T> {
                     //std::process::exit(1);
 
                 }
+                0x30 ..= 0x33 => {
+                    opcode.w = op & 1;
+                    opcode.d = (op >> 1) & 1;
+                    self.set_mrr(&mut opcode);
+                    I8086Disasm::<MinixBinData>::dump_xor(&opcode, prev_pc);
+                }
                 0x80 ..= 0x83 => {                    
                     opcode.s = (op >> 1) & 1;
                     opcode.w = op & 1;
@@ -371,7 +405,7 @@ impl<T: BinData> Disasm for I8086Disasm<T> {
                     //std::process::exit(1);
                 }
                 _ => { 
-                    println!("unknown operator");
+                    println!("unknown operator {:x}", op);
                     std::process::exit(1);
                 }
             }
